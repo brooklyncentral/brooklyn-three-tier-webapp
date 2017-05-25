@@ -72,6 +72,16 @@ brooklyn.catalog:
             enricher.targetSensor: $brooklyn:sensor("webapp.reqs.perSec.perNode")
             enricher.aggregating.fromMembers: true
             transformation: average
+        brooklyn.policies:
+        - type: org.apache.brooklyn.policy.ha.ServiceReplacer
+        - type: org.apache.brooklyn.policy.autoscaling.AutoScalerPolicy
+          brooklyn.config:
+            metric: webapp.reqs.perSec.perNode
+            metricUpperBound: 3
+            metricLowerBound: 1
+            resizeUpStabilizationDelay: 2s
+            resizeDownStabilizationDelay: 1m
+            maxPoolSize: 3
 
       - type: org.apache.brooklyn.entity.proxy.nginx.NginxController
         id: nginx
