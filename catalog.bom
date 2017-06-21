@@ -50,7 +50,7 @@ brooklyn.catalog:
         name: Cluster
         id: cluster
         brooklyn.config:
-          initialSize: 2
+          initialSize: 1
           memberSpec:
             $brooklyn:entitySpec:
               type: org.apache.brooklyn.entity.webapp.tomcat.TomcatServer
