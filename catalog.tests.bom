@@ -45,19 +45,27 @@ brooklyn.catalog:
             endpointSensor: main.uri.mapped.public
             timeout: 5m
         - type: test-case
-          name: "3. Cluster resize properly"
+          name: "3. Scale up cluster"
           brooklyn.config:
             targetId: cluster
           brooklyn.children:
-          - type: invoke-effector
-            effector: resize
-            timeout: 30m
-            params:
-              desiredSize: 3
+          - type: org.apache.brooklyn.test.framework.TestSshCommand
+            name: "Apply load to endpoint"
+            target: $brooklyn:entity("nginx")
+            shell.env:
+              TARGET_URI: $brooklyn:entity("nginx").attributeWhenReady("main.uri")
+            command: |
+              for ((i=1;i<=1000;i++)); 
+              do 
+                 curl -k -s ${TARGET_URI} > /dev/null
+              done
           - type: assert-sensor
+            name: "Check member count goes up"
             sensor: group.members.count
+            brooklyn.config:
+              timeout: 20m
             assert:
-            - equals: 3
+            - greaterThan: 1
           - type: assert-up-and-running-initial
           - type: assert-reachable
             brooklyn.config:
