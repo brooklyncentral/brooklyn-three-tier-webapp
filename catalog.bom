@@ -17,6 +17,7 @@
 # under the License.
 #
 brooklyn.catalog:
+  bundle: brooklyn-three-tier-webapp
   version: 0.0.1-SNAPSHOT
   id: ThreeTierApp
   description: This is the core Apache Brooklyn integration for deployment and in-life management of a three tier webapp. See the Apache Brooklyn documentation for further details of this blueprint 
