@@ -25,7 +25,7 @@ brooklyn.catalog:
     name: Three tier webapp Test
     item:
       services:
-      - type: ThreeTierApp
+      - type: ThreeTierApp:0.0.1-SNAPSHOT
         id: target-app
         brooklyn.config:
           ssl:
