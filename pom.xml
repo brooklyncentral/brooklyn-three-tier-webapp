@@ -6,7 +6,7 @@
 
     <groupId>io.brooklyn.three-tier-webapp</groupId>
     <artifactId>brooklyn-three-tier-webapp</artifactId>
-    <version>1.0.1-SNAPSHOT</version><!--BROOKLYN_THREE_TIER_WEBAPP_VERSION-->
+    <version>1.0.1</version><!--BROOKLYN_THREE_TIER_WEBAPP_VERSION-->
     <packaging>bundle</packaging>
 
     <parent>
