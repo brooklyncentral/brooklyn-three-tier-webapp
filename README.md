@@ -1,4 +1,4 @@
-# Three Tier Webapp
+# Brooklyn Three Tier Webapp Entity
 
 This is the core [Apache Brooklyn](http://brooklyn.apache.org/) integration for deployment and in-life management of a three tier webapp.
 

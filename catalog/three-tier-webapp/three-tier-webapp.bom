@@ -17,29 +17,21 @@
 # under the License.
 #
 brooklyn.catalog:
-  bundle: brooklyn-three-tier-webapp
-  version: 0.0.1-SNAPSHOT
-  id: ThreeTierApp
-  description: This is the core Apache Brooklyn integration for deployment and in-life management of a three tier webapp. See the Apache Brooklyn documentation for further details of this blueprint 
-  name: Three Tier Web App
+  version: 1.0.0-SNAPSHOT # BROOKLYN_THREE_TIER_WEBAPP_VERSION
   publish:
+    name: &threeTierWebappName Three Tier Web App
+    description: &threeTierWebappDescription This is the core Apache Brooklyn integration for deployment and in-life management of a three tier webapp. See the Apache Brooklyn documentation for further details of this blueprint
     license_code: Apache-2.0
-    qa: catalog.tests.bom
 
   items:
-  - id: ThreeTierApp
-    name: Three Tier Web App
-    itemType: template
-    item:
-      services:
-      - type: ThreeTierApp-application
-        name: Three Tier Web App
-
-  - id: ThreeTierApp-application
+  - id: brooklyn-three-tier-webapp
+    name: *threeTierWebappName
+    description: *threeTierWebappDescription
     itemType: entity
     item:
       type: org.apache.brooklyn.entity.stock.BasicApplication
       id: app
+      name: *threeTierWebappName
       brooklyn.parameters:
       - name: ssl
         label: Cluster SSL
