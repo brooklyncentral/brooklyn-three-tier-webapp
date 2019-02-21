@@ -38,6 +38,7 @@ brooklyn.catalog:
         type: org.apache.brooklyn.entity.proxy.ProxySslConfig
         description: |
           SSLProxy configuration that sets the api cluster loadbalancer up with ssl certificates
+        pinned: false
       brooklyn.children:
       - type: org.apache.brooklyn.entity.group.DynamicCluster
         name: Cluster
