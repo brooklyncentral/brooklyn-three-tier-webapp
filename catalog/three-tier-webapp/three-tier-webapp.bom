@@ -17,7 +17,7 @@
 # under the License.
 #
 brooklyn.catalog:
-  version: 1.0.2-SNAPSHOT # BROOKLYN_THREE_TIER_WEBAPP_VERSION
+  version: 1.1.0-SNAPSHOT # BROOKLYN_THREE_TIER_WEBAPP_VERSION
   publish:
     name: &threeTierWebappName Three Tier Web App
     description: &threeTierWebappDescription This is the core Apache Brooklyn integration for deployment and in-life management of a three tier webapp. See the Apache Brooklyn documentation for further details of this blueprint
@@ -47,11 +47,12 @@ brooklyn.catalog:
           initialSize: 1
           memberSpec:
             $brooklyn:entitySpec:
-              type: org.apache.brooklyn.entity.webapp.tomcat.TomcatServer
+              type:  org.apache.brooklyn.entity.webapp.tomcat9
               name: Tomcat Server
               brooklyn.config:
-                wars.root: http://search.maven.org/remotecontent?filepath=org/apache/brooklyn/example/brooklyn-example-hello-world-sql-webapp/0.9.0/brooklyn-example-hello-world-sql-webapp-0.9.0.war
-                java.sysprops:
+                tomcat.gz: https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.52/bin/apache-tomcat-9.0.52.tar.gz
+                root.war: http://search.maven.org/remotecontent?filepath=org/apache/brooklyn/example/brooklyn-example-hello-world-sql-webapp/0.9.0/brooklyn-example-hello-world-sql-webapp-0.9.0.war
+                catalina.properties:
                   brooklyn.example.db.url:
                     $brooklyn:formatString:
                     - "jdbc:%s%s?user=%s&password=%s"
@@ -59,6 +60,8 @@ brooklyn.catalog:
                     - "visitors"
                     - "brooklyn"
                     - "br00k11n"
+                  brooklyn.example.db.driver:
+                    $brooklyn:component("db").attributeWhenReady("datastore.driver")
         brooklyn.enrichers:
         - type: org.apache.brooklyn.enricher.stock.Aggregator
           brooklyn.config:
@@ -77,18 +80,19 @@ brooklyn.catalog:
             resizeDownStabilizationDelay: 1m
             maxPoolSize: 3
 
-      - type: org.apache.brooklyn.entity.proxy.nginx.NginxController
+      - type: org.apache.brooklyn.entity.proxy.nginx
         id: nginx
         name: Load Balancer (nginx)
         brooklyn.config:
-          loadbalancer.serverpool: $brooklyn:entity("cluster")
+          app.port: 8080
+          #loadbalancer.serverpool: $brooklyn:entity("cluster")
           nginx.sticky: false
-          ssl: $brooklyn:config("ssl")
-      - type: org.apache.brooklyn.entity.database.mysql.MySqlNode
+          #ssl: $brooklyn:config("ssl")
+      - type: org.apache.brooklyn.entity.database.mysql5
         id: db
         name: DB (MySQL)
         brooklyn.config:
-          datastore.creation.script.url: https://github.com/apache/brooklyn-library/raw/master/examples/simple-web-cluster/src/main/resources/visitors-creation-script.sql
+          creation.script.sql.url: https://github.com/apache/brooklyn-library/raw/master/examples/simple-web-cluster/src/main/resources/visitors-creation-script.sql
       brooklyn.enrichers:
       - type: org.apache.brooklyn.enricher.stock.Propagator
         brooklyn.config:
