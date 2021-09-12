@@ -40,12 +40,14 @@ brooklyn.catalog:
               To have the orchestration server download it, or to use a classpath URL with a bundled resource,
               use files.customize writing from that URL to creation-script.sql instead of this. 
             type: string
-            default: 8080
+            default: 80
           - name: nginx.sticky
             description: Whether to use sticky sessions (no sure where this is used)
             type: boolean
             default: true
-
+          - name: server.list
+            type: string
+            description: Comma separated list of server ips to manage.
         brooklyn.config:
           dontRequireTtyForSudo: true
           start.timeout: 20m
@@ -54,21 +56,74 @@ brooklyn.catalog:
           
           shell.env:
             APP_PORT: $brooklyn:config("app.port")
+            ADDR_LIST: $brooklyn:config("server.list")
 
           install.command: |
             sudo apt -y update
             sudo apt -y install nginx
 
           customize.command: |  
-            echo customize
+            sudo systemctl status nginx | grep 'running' > /dev/null 2>&1
+            if [ $? == 0 ]; then
+              echo "NginX is up. All is well with the world..."
+            else
+              echo "NginX is down. Starting it..."
+              sudo systemctl start nginx
+            fi
 
-            #sudo systemctl enable postgresql.service
+            echo "NginX - configuring ..."
+
+              cat >/tmp/load-balancer.conf <<ENDOFTEXT
+            upstream backend {
+            IPXX
+            }
+
+            server {
+              listen 80;
+
+              location / {
+                proxy_pass http://backend;
+              }
+            }
+            ENDOFTEXT
+
+            IFS=',' ADDR=(${ADDR_LIST}); unset IFS;
+
+            # TODO got to figure out how to configure NginX correctly
+            SERVERS=''
+            for i in "${ADDR[@]}"; do
+              i="${i%\"}"
+              i="${i#\"}"
+              SERVERS="${SERVERS}  server ${i};\n"
+            done
+
+            sed -i -e "s/IPXX/${SERVERS}/g" /tmp/load-balancer.conf
+
+            # configure servers to balance
+            sudo mv /tmp/load-balancer.conf /etc/nginx/conf.d/
+            # remove the default symbolic link from the sites-enabled folder.
+            sudo rm /etc/nginx/sites-enabled/default
+
+            echo "NginX - restarting ..."
+            sudo systemctl restart nginx
 
           launch.command: |
-            sudo systemctl start nginx
+            sudo systemctl status nginx | grep 'running' > /dev/null 2>&1
+            if [ $? == 0 ]; then
+              echo "NginX is up. All is well with the world."
+            else
+              echo "NginX is down. Starting it..."
+              sudo systemctl start nginx
+            fi
 
           stop.command: |
-            sudo systemctl stop nginx
+            sudo systemctl status nginx | grep 'running' > /dev/null 2>&1
+            if [ $? == 0 ]; then
+              echo "NginX is up. Shutting it down..."
+              sudo systemctl stop nginx
+            else
+              echo "NginX is already down."
+            fi
 
           checkRunning.command:
             sudo systemctl status nginx | grep -i -e 'active' -e 'online'

@@ -69,6 +69,17 @@ brooklyn.catalog:
             enricher.targetSensor: $brooklyn:sensor("webapp.reqs.perSec.perNode")
             enricher.aggregating.fromMembers: true
             transformation: average
+        - type: org.apache.brooklyn.enricher.stock.Aggregator
+          brooklyn.config:
+            enricher.sourceSensor: $brooklyn:sensor("host.public.address") # not sure about this one
+            enricher.targetSensor: $brooklyn:sensor("addr.list")
+            enricher.aggregating.fromMembers: true
+        - type: org.apache.brooklyn.enricher.stock.Joiner
+          brooklyn.config:
+            enricher.joiner.minimum: $brooklyn:config("cluster.initial.size")
+            enricher.sourceSensor: $brooklyn:sensor("addr.list")
+            enricher.targetSensor: $brooklyn:sensor("addr.list.string")
+            enricher.joiner.separator: ","
         brooklyn.policies:
         - type: org.apache.brooklyn.policy.ha.ServiceReplacer
         - type: org.apache.brooklyn.policy.autoscaling.AutoScalerPolicy
@@ -86,6 +97,7 @@ brooklyn.catalog:
         brooklyn.config:
           app.port: 8080
           #loadbalancer.serverpool: $brooklyn:entity("cluster")
+          server.list: $brooklyn:entity("cluster").attributeWhenReady("addr.list.string")
           nginx.sticky: false
           #ssl: $brooklyn:config("ssl")
       - type: org.apache.brooklyn.entity.database.mysql5
