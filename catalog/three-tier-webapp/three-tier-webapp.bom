@@ -26,6 +26,7 @@ brooklyn.catalog:
   items:
   - id: brooklyn-three-tier-webapp
     name: *threeTierWebappName
+    iconUrl: classpath://icons/3tier.png
     description: *threeTierWebappDescription
     itemType: entity
     item:
@@ -71,7 +72,7 @@ brooklyn.catalog:
             transformation: average
         - type: org.apache.brooklyn.enricher.stock.Aggregator
           brooklyn.config:
-            enricher.sourceSensor: $brooklyn:sensor("host.public.address") # not sure about this one
+            enricher.sourceSensor: $brooklyn:sensor("main.page.url")
             enricher.targetSensor: $brooklyn:sensor("addr.list")
             enricher.aggregating.fromMembers: true
         - type: org.apache.brooklyn.enricher.stock.Joiner
@@ -95,11 +96,9 @@ brooklyn.catalog:
         id: nginx
         name: Load Balancer (nginx)
         brooklyn.config:
-          app.port: 8080
-          #loadbalancer.serverpool: $brooklyn:entity("cluster")
+          app.port: 80
           server.list: $brooklyn:entity("cluster").attributeWhenReady("addr.list.string")
           nginx.sticky: false
-          #ssl: $brooklyn:config("ssl")
       - type: org.apache.brooklyn.entity.database.mysql5
         id: db
         name: DB (MySQL)

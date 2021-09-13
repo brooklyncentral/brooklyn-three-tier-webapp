@@ -52,7 +52,7 @@ brooklyn.catalog:
           dontRequireTtyForSudo: true
           start.timeout: 20m
           sshMonitoring.enabled: false
-          app.port: 8080
+          app.port: 80
           
           shell.env:
             APP_PORT: $brooklyn:config("app.port")
