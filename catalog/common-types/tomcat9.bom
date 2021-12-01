@@ -17,7 +17,7 @@
 # under the License.
 #
 brooklyn.catalog:
-  # BROOKLYN_THREE_TIER_WEBAPP_VERSION
+  version: 1.1.0-SNAPSHOT # BROOKLYN_THREE_TIER_WEBAPP_VERSION
   publish:
     name: &tomcat9Name Apache Tomcat 9 Server
     description: &tomcat9Description This is the Apache Tomcat 9 blueprint type.
