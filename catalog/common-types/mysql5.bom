@@ -71,10 +71,7 @@ brooklyn.catalog:
             DB_URL: $brooklyn:config("mysql.url")
 
           install.command: |
-            MYSQL_CFG=/etc/mysql/mysql.conf.d/
-            sudo test -d "$MYSQL_CFG" && MYSQL_EXISTS="0"
-
-            if [ "$MYSQL_EXISTS" ]; then
+            if sudo systemctl list-units --full -all | grep -Fq "mysql.service" ; then
               echo "MySQL already installed."
             else
               echo "Installing MySQL."
@@ -111,14 +108,10 @@ brooklyn.catalog:
             fi
 
           customize.command: |
-            # When MySQL is stopped `systemctl status mysql` returns `Active: inactive (dead)`
-            # reminder: test for what you expect
-            sudo systemctl status mysql | grep 'dead' > /dev/null 2>&1
-            if [ $? != 0 ] ; then
+            if sudo systemctl show mysql --property=SubState | grep -Fq 'dead' ; then
               echo "MySQL is running when configure is called. Skipping configuration assuming it has already been done. If this is not correct then stop the DB before invoking this."
             else
               echo "Configuring MySQL..."
-              # When MySQL is up `systemctl status mysql` returns `Active: active (running)`
               sudo systemctl start mysql
 
               if [ ! -z "${CREATION_SCRIPT_URL}" ] ; then
@@ -129,8 +122,7 @@ brooklyn.catalog:
             fi
 
           launch.command: |
-            sudo systemctl status mysql | grep 'running' > /dev/null 2>&1
-            if [ $? == 0 ]; then
+            if sudo systemctl show mysql --property=SubState | grep -Fq 'running' ; then
               echo "MySQL is up. All is well with the world."
             else
               echo "MySQL is down. Starting it..."
@@ -138,8 +130,7 @@ brooklyn.catalog:
             fi
 
           stop.command: |
-            sudo systemctl status mysql | grep 'running' > /dev/null 2>&1
-            if [ $? == 0 ]; then
+            if sudo systemctl show mysql --property=SubState | grep -Fq 'running' ; then
               echo "MySQL is up. Shutting it down..."
               sudo systemctl stop mysql
             else
@@ -147,7 +138,7 @@ brooklyn.catalog:
             fi
 
           checkRunning.command:
-            sudo /etc/init.d/mysql status | grep -i -e 'active' -e 'uptime'
+            sudo systemctl show mysql --property=SubState | grep -Fq 'running'
 
         brooklyn.initializers:
           - type: org.apache.brooklyn.core.sensor.StaticSensor

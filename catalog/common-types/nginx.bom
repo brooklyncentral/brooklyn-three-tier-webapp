@@ -63,8 +63,7 @@ brooklyn.catalog:
             sudo apt -y install nginx
 
           customize.command: |  
-            sudo systemctl status nginx | grep 'running' > /dev/null 2>&1
-            if [ $? == 0 ]; then
+            if sudo systemctl show nginx --property=SubState | grep -Fq 'running' ; then
               echo "NginX is up. All is well with the world..."
             else
               echo "NginX is down. Starting it..."
@@ -108,8 +107,7 @@ brooklyn.catalog:
             sudo systemctl restart nginx
 
           launch.command: |
-            sudo systemctl status nginx | grep 'running' > /dev/null 2>&1
-            if [ $? == 0 ]; then
+            if sudo systemctl show nginx --property=SubState | grep -Fq 'running' ; then
               echo "NginX is up. All is well with the world."
             else
               echo "NginX is down. Starting it..."
@@ -117,8 +115,7 @@ brooklyn.catalog:
             fi
 
           stop.command: |
-            sudo systemctl status nginx | grep 'running' > /dev/null 2>&1
-            if [ $? == 0 ]; then
+            if sudo systemctl show nginx --property=SubState | grep -Fq 'running' ; then
               echo "NginX is up. Shutting it down..."
               sudo systemctl stop nginx
             else
@@ -126,7 +123,7 @@ brooklyn.catalog:
             fi
 
           checkRunning.command:
-            sudo systemctl status nginx | grep -i -e 'active' -e 'online'
+            sudo systemctl show nginx --property=SubState | grep -Fq 'running'
 
         brooklyn.enrichers:
           - type: org.apache.brooklyn.enricher.stock.Transformer
