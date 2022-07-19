@@ -1,0 +1,158 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+brooklyn.catalog:
+  version: 1.0.0-SNAPSHOT # BROOKLYN_THREE_TIER_WEBAPP_VERSION
+  publish:
+    name: &mysql5Name MySQL 5 Server
+    description: &mysql5Description This is the MySQL 5 blueprint type.
+    license_code: Apache-2.0
+
+  items:
+    - id: org.apache.brooklyn.entity.database.mysql5
+      name: *mysql5Name
+      iconUrl: classpath://icons/mysql.png
+      item:
+        name: *mysql5Name
+        type: org.apache.brooklyn.entity.software.base.VanillaSoftwareProcess
+
+        brooklyn.parameters:
+          - name: creation.script.sql.url
+            label: SQL creation script URL
+            description: |
+              If supplied, the server will download a creation SQL script from this URL and
+              initialize the DB with it.
+              To have the orchestration server download it, or to use a classpath URL with a bundled resource,
+              use files.customize writing from that URL to creation-script.sql instead of this.
+            type: string
+            default: ""
+          - name: mysql.url
+            type: string
+            label: Database pack URL
+            default: "https://artifactory.cloudsoftcorp.com/artifactory/libs-release-local/io/cloudsoft/packs/mysql5/1.0.0/mysql5-1.0.0-tar.gz"
+            description: |
+               Publicly accessible URL of MySQL  to install.
+               If this is not supplied, callers should typically set files.customize to install,
+               including multiple archives bundled with the blueprint.
+          - name: install.command
+            pinned: false
+          - name: customize.command
+            pinned: false
+          - name: launch.command
+            pinned: false
+          - name: checkRunning.command
+            pinned: false
+          - name: stop.command
+            pinned: false
+
+        brooklyn.config:
+          dontRequireTtyForSudo: true
+          start.timeout: 20m
+          sshMonitoring.enabled: false
+          mysql.port: 3306
+
+          shell.env:
+            CREATION_SCRIPT_URL: $brooklyn:config("creation.script.sql.url")
+            DB_URL: $brooklyn:config("mysql.url")
+
+          install.command: |
+            if sudo systemctl list-units --full -all | grep -Fq "mysql.service" ; then
+              echo "MySQL already installed."
+            else
+              echo "Installing MySQL."
+              while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/{lock,lock-frontend} >/dev/null 2>&1; do
+                echo 'Waiting for release of dpkg/apt locks...';
+                sleep 5
+              done
+
+              which curl || sudo apt --assume-yes install curl
+
+              ## Install the MySQL server
+              if [ ! -z "${DB_URL}" ] ; then
+                 curl -L -k -f -o mysql.tar.gz "${DB_URL}"
+              fi
+              tar xf mysql.tar.gz
+              PREV=`pwd`
+              cd mysql
+              while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/{lock,lock-frontend} >/dev/null 2>&1; do
+                echo 'Waiting for release of dpkg/apt locks...';
+                sleep 5
+              done
+              sudo ./dbmanager.sh install
+              cd $PREV
+
+              sudo systemctl stop mysql
+
+              cat >/tmp/zz-bind-address.cnf <<ENDOFTEXT
+            [mysqld]
+            bind-address = 0.0.0.0
+            ENDOFTEXT
+
+              sudo mv /tmp/zz-bind-address.cnf /etc/mysql/mysql.conf.d/
+              sudo chown root:root /etc/mysql/mysql.conf.d/zz-bind-address.cnf
+            fi
+
+          customize.command: |
+            if sudo systemctl show mysql --property=SubState | grep -Fq 'dead' ; then
+              echo "MySQL is running when configure is called. Skipping configuration assuming it has already been done. If this is not correct then stop the DB before invoking this."
+            else
+              echo "Configuring MySQL..."
+              sudo systemctl start mysql
+
+              if [ ! -z "${CREATION_SCRIPT_URL}" ] ; then
+                  echo "Fetching and running creation script from ${CREATION_SCRIPT_URL}..."
+                  curl -L -k -f -o creation-script-from-url.sql ${CREATION_SCRIPT_URL}
+                  sudo mysql -u root < creation-script-from-url.sql
+              fi
+            fi
+
+          launch.command: |
+            if sudo systemctl show mysql --property=SubState | grep -Fq 'running' ; then
+              echo "MySQL is up. All is well with the world."
+            else
+              echo "MySQL is down. Starting it..."
+              sudo systemctl start mysql
+            fi
+
+          stop.command: |
+            if sudo systemctl show mysql --property=SubState | grep -Fq 'running' ; then
+              echo "MySQL is up. Shutting it down..."
+              sudo systemctl stop mysql
+            else
+              echo "MySQL is already down."
+            fi
+
+          checkRunning.command:
+            sudo systemctl show mysql --property=SubState | grep -Fq 'running'
+
+        brooklyn.initializers:
+          - type: org.apache.brooklyn.core.sensor.StaticSensor
+            brooklyn.config:
+              name: datastore.driver
+              static.value: "com.mysql.jdbc.Driver"
+
+        brooklyn.enrichers:
+          - type: org.apache.brooklyn.enricher.stock.Transformer
+            brooklyn.config:
+              enricher.sourceSensor: $brooklyn:sensor("host.name")
+              enricher.targetSensor: $brooklyn:sensor("datastore.url")
+              enricher.targetValue:
+                $brooklyn:formatString:
+                  - "mysql://%s:%s"
+                  - $brooklyn:attributeWhenReady("host.name")
+                  - $brooklyn:config("mysql.port")

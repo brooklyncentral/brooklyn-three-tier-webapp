@@ -1,0 +1,191 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+brooklyn.catalog:
+  version: 1.1.0-SNAPSHOT # BROOKLYN_THREE_TIER_WEBAPP_VERSION
+  publish:
+    name: &tomcat9Name Apache Tomcat 9 Server
+    description: &tomcat9Description This is the Apache Tomcat 9 blueprint type.
+    license_code: Apache-2.0
+
+  items:
+    - id: org.apache.brooklyn.entity.webapp.tomcat9
+      name: *tomcat9Name
+      iconUrl: classpath://icons/tomcat9.png
+      item:
+        name: *tomcat9Name
+        type: org.apache.brooklyn.entity.software.base.VanillaSoftwareProcess
+
+        brooklyn.parameters:
+          - name: root.war
+            type: string
+            label: WAR URL
+            default: ""
+            description: |
+              Publicly accessible URL of WAR to install as the root application. 
+              If this is not supplied, callers should typically set files.customize to install,
+              including multiple WARs and WARs bundled with the blueprint.
+            pinned: true
+          - name: tomcat.gz
+            type: string
+            label: Tomcat Tarball URL
+            default: https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.52/bin/apache-tomcat-9.0.52.tar.gz
+            description: |
+              Publicly accessible URL of Apache Tomcat to install.
+              If this is not supplied, callers should typically set files.customize to install,
+              including multiple archives bundled with the blueprint.
+            pinned: true
+          - name: catalina.properties
+            label: Java system properties
+            type: java.util.Map
+            default: {}
+
+          - name: install.command
+            pinned: false
+          - name: customize.command
+            pinned: false
+          - name: launch.command
+            pinned: false
+          - name: checkRunning.command
+            pinned: false
+          - name: stop.command
+            pinned: false
+    
+        brooklyn.config:
+          dontRequireTtyForSudo: true
+          start.timeout: 20m
+          sshMonitoring.enabled: false
+          app.port: 8080
+
+          shell.env:
+            APP_PORT: $brooklyn:config("app.port")
+            ROOT_WAR: $brooklyn:config("root.war")
+            TOMCAT_GZ: $brooklyn:config("tomcat.gz")
+            CATALINA_PROPERTIES: $brooklyn:config("catalina.properties")
+
+          install.command: |
+            CATALINA=/usr/local/tomcat
+            sudo test -d "$CATALINA" && CATALINA_EXISTS="0"
+
+            if [ "$CATALINA_EXISTS" ]; then
+              echo "Tomcat already installed."
+            else
+              echo "Installing Tomcat..."
+              while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/lock >/dev/null 2>&1; do
+               echo Waiting for other instances of apt to complete...
+               sleep 5
+              done
+
+              which curl || sudo apt --assume-yes install curl
+
+              # Install java if needed
+              if ( which java ) ; then
+                echo "Java already installed."
+              else
+                echo "Trying to install java."
+                # occasionally AWS comes up without this repo
+                sudo add-apt-repository -y ppa:openjdk-r/ppa || echo could not add repo, will continue trying java install anyway
+                sudo apt-get update || echo could not apt-get update, will continue trying java install anyway
+
+                sudo apt --assume-yes install openjdk-8-jdk-headless
+                sudo apt --assume-yes install openjdk-8-jre-headless
+              fi
+
+              # Install Apache Tomcat
+              cd ${INSTALL_DIR}
+              sudo mkdir /usr/local/tomcat
+              if [ ! -z "${TOMCAT_GZ}" ] ; then
+                echo "Downloading TOMCAT from ${TOMCAT_GZ}"
+                curl -L -k -f -o tomcat.tar.gz "${TOMCAT_GZ}"
+              fi
+              sudo tar xf tomcat.tar.gz -C /usr/local/tomcat --strip-components=1
+              sudo chmod 750 /usr/local/tomcat/bin
+              sudo sed --in-place 's#<Connector port="8080" protocol="HTTP/1.1"#\0 address="0.0.0.0"#g' /usr/local/tomcat/conf/server.xml
+            fi
+
+          customize.command: |
+            CFG_LOG=/usr/local/tomcat/logs/configure.log
+            sudo test -f "$CFG_LOG" && CFG_EXISTS="0"
+
+            if [ "$CFG_EXISTS" ]; then
+              echo "Skipping configuration assuming it has already been done. If this is not correct, review your blueprint scripts."
+            else
+              sudo find /usr/local/tomcat/webapps -mindepth 1 -delete
+              cd ${INSTALL_DIR}
+              if [ ! -z "${ROOT_WAR}" ] ; then
+                 curl -L -k -f -o ROOT.war "${ROOT_WAR}"
+              fi
+              if ( ls *.war ) ; then
+                  sudo mv *.war /usr/local/tomcat/webapps/
+              fi
+              echo "${CATALINA_PROPERTIES}" | jq -r 'to_entries[]|"\(.key)=\(.value)"' | sudo tee -a /usr/local/tomcat/conf/catalina.properties
+              echo "configured" | sudo tee /usr/local/tomcat/logs/configure.log
+            fi
+
+          launch.command: |
+            sudo lsof -i:8080 && CATALINA_STARTED="0"
+
+            if [ "$CATALINA_STARTED" ]; then
+              echo "Tomcat already started."
+            else
+              echo "Tomcat starting..."
+              sudo /usr/local/tomcat/bin/startup.sh
+            fi
+
+          stop.command: |
+            sudo lsof -i:8080 && CATALINA_STARTED="0"
+
+            if [ "$CATALINA_STARTED" ]; then
+              sudo /usr/local/tomcat/bin/shutdown.sh
+              echo "Tomcat stopping..."
+            else
+              echo "Tomcat already stopped."
+            fi
+
+          checkRunning.command:
+            curl -f -k http://localhost:${APP_PORT}/
+
+        brooklyn.initializers:
+          - type: org.apache.brooklyn.core.sensor.ssh.SshCommandSensor
+            brooklyn.config:
+              name: cpu
+              period: 15s
+              # take read after 5s to ensure it stabilises (really only needed immediately post-deploy)
+              command: |
+                top -b -d 2 -n 5 -p 1 | grep "%Cpu" | tail -1 | cut -d , -f 4 | awk '{print (100-$1)/100.0}'
+
+        brooklyn.enrichers:
+          - type: org.apache.brooklyn.enricher.stock.Transformer
+            brooklyn.config:
+              enricher.sourceSensor: $brooklyn:sensor("host.name")
+              enricher.targetSensor: $brooklyn:sensor("main.uri")
+              enricher.targetValue:
+                $brooklyn:formatString:
+                - "http://%s:%s"
+                - $brooklyn:attributeWhenReady("host.name")
+                - $brooklyn:config("app.port")
+          - type: org.apache.brooklyn.enricher.stock.Transformer
+            brooklyn.config:
+              enricher.sourceSensor: $brooklyn:sensor("host.name")
+              enricher.targetSensor: $brooklyn:sensor("main.page.url")
+              enricher.targetValue:
+                $brooklyn:formatString:
+                - "%s:%s"
+                - $brooklyn:attributeWhenReady("host.name")
+                - $brooklyn:config("app.port")
+
